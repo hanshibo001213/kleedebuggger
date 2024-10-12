@@ -1,0 +1,125 @@
+{
+  "name": "kleeDebugger",
+  "displayName": "kleeDebugger",
+  "description": "kleeDebugger",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onDebugResolve:klee-debugger",
+    "onDebugInitialConfigurations:klee-debugger"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "extension.klee-debug.runEditorContents",
+          "when": "resourceLangId == c",
+          "group": "navigation@1"
+        },
+        {
+          "command": "extension.klee-debug.debugEditorContents",
+          "when": "resourceLangId == c",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "extension.klee-debug.debugEditorContents",
+          "when": "resourceLangId == c"
+        },
+        {
+          "command": "extension.klee-debug.runEditorContents",
+          "when": "resourceLangId == c"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "extension.klee-debug.debugEditorContents",
+        "title": "Debug File",
+        "category": "Klee Debug",
+        "enablement": "!inDebugMode",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "extension.klee-debug.runEditorContents",
+        "title": "Run File",
+        "category": "Klee Debug",
+        "enablement": "!inDebugMode",
+        "icon": "$(play)"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "c"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "klee-debugger",
+        "label": "klee-debugger",
+        "languages": [
+          "c"
+        ],
+        "program": "./out/debugAdapter.js",
+        "runtime": "node",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Path to the C file to debug",
+                "default": "${workspaceFolder}/get_sign.c"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": true
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "name": "Launch KLEE Debugger",
+            "type": "klee-debugger",
+            "request": "launch",
+            "program": "${workspaceFolder}/get_sign.c",
+            "stopOnEntry": true
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.93.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.2",
+    "@typescript-eslint/parser": "^7.0.2",
+    "@vscode/test-cli": "^0.0.6",
+    "@vscode/test-electron": "^2.3.9",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "vscode-debugadapter": "^1.51.0"
+  }
+}
