@@ -43,7 +43,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		);
 
-		const htmlPath = path.join(context.extensionPath, 'src', 'test2.html');
+		const htmlPath = path.join(context.extensionPath, 'src', 'webview.html');
 		panel.webview.html = fs.readFileSync(htmlPath, 'utf8');
 
 		panel.onDidDispose(() => {
