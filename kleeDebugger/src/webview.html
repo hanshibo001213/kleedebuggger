@@ -4,34 +4,636 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tool Output</title>
+    <title>Klee Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f3f4f6;
+            overflow: hidden;
+        }
+
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: space-between;
+            width: 90vw;
+            height: 90vh;
+        }
+
+        .big-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            width: 100%;
+            height: 160px;
+            margin-bottom: 50px;
+        }
+
+        .small-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+            flex-direction: row;
+            align-items: center;
+            padding: 0px 0px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 10px;
+        }
+
+        .data-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            text-align: center;
+            position: relative;
+        }
+
+        .data-item:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            right: 0;
+            height: 100%;
+            width: 1px;
+            background-color: #e0e0e0;
+        }
+
+        .data-item .title {
+            font-weight: 600;
+            font-size: 1rem;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .data-item .value {
+            color: #e74c3c;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .container-small-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .bottom-containers {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            flex-grow: 1;
+            min-height: 150px;
+        }
+
+        .bottom-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: space-between;
+            width: 48%;
+        }
+
+        .testcase-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: stretch;
+            width: 100%;
+            height: 100%;
+            padding: 0px 0px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-top: 10px;
+        }
+
+        .testcase-item {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            padding: 10px;
+            font-size: 1rem;
+            position: relative;
+        }
+
+        .testcase-item div {
+            margin-right: 30px;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            display: block;
+        }
+
+        .node rect {
+            fill: #3c6575;
+        }
+
+        .node text {
+            font: 10px sans-serif;
+            fill: white;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 1.5px;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Klee Output</h1>
-    <pre id="output">Waiting for output...</pre>
+
+    <div class="main-container">
+
+        <div class="big-container">
+            <div class="container-small-title">Statistics</div>
+            <div class="small-container">
+                <div class="data-item">
+                    <div class="title">Time(s)</div>
+                    <div class="value">-</div>
+                </div>
+                <div class="data-item">
+                    <div class="title">ICov(%)</div>
+                    <div class="value">-</div>
+                </div>
+                <div class="data-item">
+                    <div class="title">BCov(%)</div>
+                    <div class="value">-</div>
+                </div>
+                <div class="data-item">
+                    <div class="title">TSolver(%)</div>
+                    <div class="value">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-containers">
+
+            <div class="bottom-container">
+                <div class="container-small-title">Execution Tree</div>
+                <div class="small-container">
+                    <!-- <pre id="wait">Waiting for output...</pre> -->
+                    <svg>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="bottom-container">
+                <div class="container-small-title">Testcases</div>
+                <div class="testcase-container" id="testcases-container">
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        // const vscode = acquireVsCodeApi();
 
-        // // 页面加载时请求之前的输出
-        // window.addEventListener('load', () => {
-        //     vscode.postMessage({ type: 'requestPreviousOutput' });
-        // });
+        const treeLayout = d3.tree().nodeSize([120, 80]);
 
-        // 监听来自 extension.ts 的消息
+        const svg = d3.select("svg");
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.5, 5])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+                adjustSvgSize();
+            });
+
+        svg.call(zoom);
+
+        const g = svg.append("g").attr("transform", "translate(50,50)");
+
+
+
+        let rootNode;
+        let firstLoad = true;
+
         window.addEventListener('message', event => {
             const message = event.data;
-            const outputElement = document.getElementById('output');
+            const outputElement = document.getElementById('wait');
 
-            if (message.type === 'stdout') {
-                // 如果是初始文字，先清空它
-                if (outputElement.textContent.includes('Waiting for output...')) {
-                    outputElement.textContent = '';
-                }
-                outputElement.textContent += message.content + '\n';
+
+            if (message.type === 'jsonTree') {
+                console.log("Received data:", message.content);
+
+                let parseData;
+                parseData = JSON.parse(message.content);
+
+                parseData.forEach(item => {
+                    if (item.constraints && Array.isArray(item.constraints)) {
+                        const combinedConstraints = item.constraints.join(' && ');
+                        item.constraints = combinedConstraints;
+                    }
+                });
+                console.log(Array.isArray(parseData));
+                console.log(parseData);
+                updateTree(parseData);
+            }
+
+
+            else if (message.type === 'ktestOutput') {
+                console.log("Received data:", message.content);
+                const cases = processKtestOutput(message.content);
+                console.log("用例", cases);
+                cases.forEach(({ file, variables }) => {
+                    addTestCase(rootNode, file, variables);
+                });
+                console.log(rootNode);
+                console.log(Array.isArray(rootNode.data));
+                rootNode = d3.hierarchy(rootNode.data);
+
+                update(rootNode);
+
+
+                const container = document.getElementById('testcases-container');
+
+                container.innerHTML = '';
+
+                cases.forEach(testcase => {
+                    const dataItem = document.createElement('div');
+                    dataItem.classList.add('testcase-item');
+
+                    const fileElement = document.createElement('div');
+                    fileElement.textContent = testcase.file;
+
+                    const variableString = Object.keys(testcase.variables)
+                        .map(key => `${key} == ${testcase.variables[key]}`)
+                        .join(' && ');
+
+                    const variableElement = document.createElement('div');
+                    variableElement.textContent = variableString;
+
+                    dataItem.append(fileElement);
+                    dataItem.append(variableElement);
+                    container.append(dataItem);
+                });
+            }
+
+
+            else if (message.type === 'kstatsOutput') {
+                console.log("Received kstatsdata:", message.content);
+                const statistics = parseTableData(message.content);
+                console.log("statistics", statistics);
+                const dataItems = document.querySelectorAll(".data-item");
+
+                dataItems.forEach((item) => {
+                    const title = item.querySelector(".title").textContent.trim();
+
+                    if (statistics[title]) {
+                        console.log(statistics[title]);
+
+                        const valueElement = item.querySelector(".value");
+                        valueElement.textContent = statistics[title];
+                    }
+                });
             }
         });
+
+        function updateTree(data) {
+            const root = findRootNode(data);
+            console.log("根节点", root);
+
+            const tree = buildTree(data);
+            console.log("Tree structure:", tree);
+
+            rootNode = d3.hierarchy(tree.get(root.name));
+
+            update(rootNode);
+            adjustSvgSize();
+        }
+
+        function findRootNode(data) {
+            const allChildren = data.flatMap(item => item.children || []);
+
+            const root = data.find(item => !allChildren.includes(item.name));
+            return root;
+        }
+
+        function buildTree(data) {
+            const nodesMap = new Map(data.map(d => [d.name, { ...d, children: [], _children: [] }]));
+
+            data.forEach(node => {
+                node.children.forEach(childName => {
+                    const childNode = nodesMap.get(childName);
+                    if (childNode) {
+                        nodesMap.get(node.name).children.push(childNode);
+                    }
+                });
+            });
+            return nodesMap;
+        }
+
+        function update(source) {
+
+            treeLayout(rootNode);
+
+            const nodes = rootNode.descendants();
+            const links = rootNode.links();
+            console.log("Nodes after layout:", nodes);
+            console.log("Links after layout:", links);
+
+            const node = g.selectAll(".node")
+                .data(nodes, d => d.data.name);
+
+            console.log("D3 node selection:", node);
+            node.each(d => {
+                console.log("Node name:", d.data.name, "Testcase:", d.data.testcase);
+            });
+
+            const nodeEnter = node.enter()
+                .append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${source.x0 || 0}, ${source.y0 || 0})`)
+                .on("click", (event, d) => {
+                    console.log("Node clicked:", d.data.name);
+                    toggle(d);
+                    update(d);
+                });
+            nodeEnter.each(d => {
+                console.log("Node name:", d.data.name, "Testcase:", d.data.testcase);
+            });
+
+            nodeEnter.append("rect")
+                .attr("width", d => String(d.data.name).length * 6 + 30)
+                .attr("height", 30)
+                .attr("x", d => -(String(d.data.name).length * 3 + 15))
+                .attr("y", -15)
+                .attr("rx", 10)
+                .attr("ry", 10);
+
+            nodeEnter.each(d => {
+                console.log(d);
+                console.log("Node data:", d.data);
+                console.log(typeof d.data);
+                console.log("Node name:", d.data.name);
+                console.log("Testcase:", d.data.testcase);
+                console.log("Type of testcase:", typeof d.data.testcase);
+            });
+
+            nodeEnter.append("text")
+                .attr("dy", 4)
+                .attr("text-anchor", "middle")
+                .text(d => d.data.constraints || d.data.testcase);
+
+            const nodeUpdate = nodeEnter.merge(node);
+
+            const transition = nodeUpdate.transition().duration(300);
+
+            transition.attr("transform", d => `translate(${d.x || 0}, ${d.y || 0})`);
+
+            node.exit().transition()
+                .duration(300)
+                .attr("transform", d => `translate(${source.x || 0}, ${source.y || 0})`)
+                .remove();
+
+            nodes.forEach(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+
+            const link = g.selectAll(".link")
+                .data(links, d => d.target.name);
+
+            const linkEnter = link.enter()
+                .insert("path", "g")
+                .attr("class", "link")
+                .attr("d", d => {
+                    const o = { x: source.x0 || 0, y: source.y0 || 0 };
+                    return diagonal(o, o);
+                });
+
+            link.merge(linkEnter).transition()
+                .duration(0)
+                .attr("d", d => diagonal(d.source, d.target))
+                ;
+
+            link.exit().transition()
+                .duration(0)
+                .attr("d", d => {
+                    const o = { x: source.x || 0, y: source.y || 0 };
+                    return diagonal(o, o);
+                })
+                .remove();
+
+            if (firstLoad) {
+                fitToScreen();
+            }
+
+            firstLoad = false;
+        }
+
+        function diagonal(s, d) {
+            const sx = s.x || 0, sy = s.y || 0;
+            const dx = d.x || 0, dy = d.y || 0;
+
+            const sourceX = s.x;
+            const sourceY = s.y + 15;
+            const targetX = d.x;
+            const targetY = d.y - 15;
+
+            const controlX1 = sourceX;
+            const controlY1 = (sourceY + targetY) / 2;
+
+            const controlX2 = targetX;
+            const controlY2 = (sourceY + targetY) / 2;
+
+            const path = d3.path();
+            path.moveTo(sourceX, sourceY);
+            path.bezierCurveTo(controlX1, controlY1, controlX2, controlY2, targetX, targetY);
+
+            return path.toString();
+        }
+
+        function toggle(d) {
+
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+
+            } else {
+                d.children = d._children;
+                d._children = null;
+            }
+        }
+
+        function adjustSvgSize() {
+            const bbox = g.node().getBBox();
+            svg.attr("width", bbox.width + bbox.x * 2)
+                .attr("height", bbox.height + bbox.y * 2);
+        }
+
+        function fitToScreen(padding = 20) {
+            const bbox = g.node().getBBox();
+            console.log("BBox:", bbox);
+
+            const width = Math.max(1, bbox.width);
+            const height = Math.max(1, bbox.height);
+
+            const svgWidth = svg.node().clientWidth;
+            const svgHeight = svg.node().clientHeight;
+
+            const widthRatio = (svgWidth - padding * 2) / bbox.width;
+            const heightRatio = (svgHeight - padding * 2) / bbox.height;
+            const scale = Math.min(widthRatio, heightRatio);
+
+            const x = (svgWidth - bbox.width * scale) / 2 - bbox.x * scale;
+            const y = (svgHeight - bbox.height * scale) / 2 - bbox.y * scale;
+
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(x, y).scale(scale)
+            );
+        }
+
+        function addTestCase(root, ktestFile, variables) {
+
+            const testCase = Object.entries(variables)
+                .map(([key, value]) => `${key}==${value}`)
+                .join(' && ');
+            console.log("这里的类型");
+            console.log(typeof testCase);
+
+            console.log(`Generated testCase: ${testCase}`);
+            function traverse(node) {
+
+                if (!node || !node.data) {
+                    console.warn("Node or node.data is undefined:", node);
+                    return false;
+                }
+
+                if (node.children && node.children.length > 0) {
+                    for (let child of node.children) {
+                        if (traverse(child)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                else {
+
+                    if (!node.data.constraints) {
+                        console.error("该结点是用例:", node);
+                        return false;
+                    } else {
+                        const constraints = node.data.constraints;
+                        console.log(node.data.name);
+                        console.log(constraints);
+                        console.log(`Checking leaf node with constraints: ${constraints}`);
+
+                        try {
+                            const evaluatedConstraints = constraints.replace(
+                                new RegExp(Object.keys(variables).join('|'), 'g'),
+                                (match) => variables[match]
+                            );
+                            console.log(`Evaluating constraints: ${evaluatedConstraints}`);
+
+                            const isValid = eval(evaluatedConstraints);
+                            console.log(`Result of evaluation: ${isValid}`);
+
+                            if (isValid) {
+                                node.children = [];
+                                const newChild = JSON.parse(JSON.stringify({
+                                    name: ktestFile,
+                                    testcase: testCase,
+                                    children: [],
+                                    x: node.x || 0,
+                                    y: node.y || 0,
+                                    x0: node.x || 0,
+                                    y0: node.y || 0,
+                                }));
+                                node.children.push(newChild);
+                                node.data.children.push(newChild);
+                                console.log(`Added test case ${testCase} to node with constraints: ${constraints}`);
+                                return true;
+                            } else {
+                                console.log(`Test case ${testCase} did not meet constraints: ${constraints}`);
+                            }
+                        } catch (err) {
+                            console.error(`Error evaluating constraints: ${err}`);
+                        }
+                    }
+                }
+            }
+            traverse(root);
+        }
+
+        function processKtestOutput(output) {
+            const lines = output.split('\n');
+            const testCases = [];
+            let currentKtestFile = null;
+            let currentVariables = {};
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+
+                if (line.startsWith('ktest file :')) {
+                    if (currentKtestFile && Object.keys(currentVariables).length > 0) {
+
+                        testCases.push({ file: currentKtestFile, variables: { ...currentVariables } });
+                    }
+                    currentKtestFile = line.split(':')[1]
+                        .trim()
+                        .replace(/^'|'$/g, '')
+                        .match(/test\d{6}/)[0];
+                    currentVariables = {};
+                    continue;
+                }
+
+                if (line.startsWith('object') && line.includes('name:')) {
+                    const varName = line.split(':')[2].trim().replace(/'/g, '');
+                    const intValueLine = lines[i + 4].trim();
+                    const intValue = parseInt(intValueLine.split(':')[2].trim(), 10);
+
+                    currentVariables[varName] = intValue;
+                }
+            }
+
+            if (currentKtestFile && Object.keys(currentVariables).length > 0) {
+                testCases.push({ file: currentKtestFile, variables: { ...currentVariables } });
+            }
+            return testCases;
+        }
+
+        function parseTableData(rawData) {
+
+            const lines = rawData.trim().split('\n');
+
+            const headers = lines[1]
+                .split('|')
+                .filter(Boolean)
+                .map(header => header.trim());
+
+            const rowData = lines[3]
+                .split('|')
+                .filter(Boolean)
+                .map(cell => cell.trim());
+
+            const parsedData = {};
+            headers.forEach((header, index) => {
+                parsedData[header] = rowData[index];
+            });
+
+            return parsedData;
+        }
+
     </script>
 </body>
 
