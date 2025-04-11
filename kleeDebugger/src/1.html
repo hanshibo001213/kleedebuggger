@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horizontal Data Display</title>
+</head>
+<div id="table-container"></div>
+
+
+<body>
+    <script>
+        // 原始文本数据
+        const rawData = `
+--------------------------------------------------------------------------------------
+|         Path          |  Instrs|  Time(s)|  ICov(%)|  BCov(%)|  ICount|  TSolver(%)|
+--------------------------------------------------------------------------------------
+|/home/test/klee-out-752|      33|    18.41|   100.00|   100.00|      27|        0.16|
+--------------------------------------------------------------------------------------
+        `;
+
+        // 解析函数
+        function parseTableData(rawData) {
+            // 按行分割数据
+            const lines = rawData.trim().split('\n');
+
+            // 提取表头（去掉 | 和多余空格）
+            const headers = lines[1]
+                .split('|')
+                .filter(Boolean)
+                .map(header => header.trim());
+
+            // 提取表格数据（第二行数据）
+            const rowData = lines[3]
+                .split('|')
+                .filter(Boolean)
+                .map(cell => cell.trim());
+
+            // 将表头和行数据组合成对象
+            const parsedData = {};
+            headers.forEach((header, index) => {
+                parsedData[header] = rowData[index];
+            });
+
+            return parsedData;
+        }
+
+        // 调用解析函数
+        const parsedResult = parseTableData(rawData);
+
+        // 打印结果
+        console.log(parsedResult);
+
+        function renderTable(data) {
+            const tableContainer = document.getElementById('table-container');
+            let tableHTML = '<table border="1" style="width: 100%; border-collapse: collapse;">';
+
+            // 表头
+            tableHTML += '<tr>';
+            Object.keys(data).forEach(key => {
+                tableHTML += `<th style="padding: 8px; text-align: left;">${key}</th>`;
+            });
+            tableHTML += '</tr>';
+
+            // 数据行
+            tableHTML += '<tr>';
+            Object.values(data).forEach(value => {
+                tableHTML += `<td style="padding: 8px;">${value}</td>`;
+            });
+            tableHTML += '</tr>';
+
+            tableHTML += '</table>';
+            tableContainer.innerHTML = tableHTML;
+        }
+
+        // 调用渲染函数
+        renderTable(parsedResult);
+
+    </script>
+</body>
+
+</html>

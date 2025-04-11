@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Output</title>
+</head>
+
+<body>
+    <h1>Klee Output</h1>
+    <pre id="output">Waiting for output...</pre>
+
+    <script>
+        // const vscode = acquireVsCodeApi();
+
+        // // 页面加载时请求之前的输出
+        // window.addEventListener('load', () => {
+        //     vscode.postMessage({ type: 'requestPreviousOutput' });
+        // });
+
+        // 监听来自 extension.ts 的消息
+        window.addEventListener('message', event => {
+            const message = event.data;
+            const outputElement = document.getElementById('output');
+
+            if (message.type === 'stdout') {
+                // 如果是初始文字，先清空它
+                if (outputElement.textContent.includes('Waiting for output...')) {
+                    outputElement.textContent = '';
+                }
+                outputElement.textContent += message.content + '\n';
+            }
+        });
+    </script>
+</body>
+
+</html>

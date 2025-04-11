@@ -78,7 +78,7 @@
               "program": {
                 "type": "string",
                 "description": "Path to the C file to debug",
-                "default": "${workspaceFolder}/get_sign.c"
+                "default": "${file}"
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -93,7 +93,7 @@
             "name": "Launch KLEE Debugger",
             "type": "klee-debugger",
             "request": "launch",
-            "program": "${workspaceFolder}/get_sign.c",
+            "program": "${workspaceFolder}/test.c",
             "stopOnEntry": true
           }
         ]

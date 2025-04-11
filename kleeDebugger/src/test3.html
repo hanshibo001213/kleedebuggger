@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Klee Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            /* 确保不会出现滚动条 */
+            display: grid;
+            place-items: center;
+            /* 水平和垂直居中 */
+        }
+
+        #svg-container {
+            width: 85vw;
+            height: 85vh;
+            overflow: hidden;
+            /* 确保不会出现滚动条 */
+            /* width: 95%;
+            height: 95%; */
+            /* 宽度修改为 100% */
+            /* max-width: 1200px; */
+            /* 可选：设置最大宽度 */
+            padding: 20px;
+            /* 内边距 */
+            background-color: #ffffff;
+            /* 背景颜色 */
+            border-radius: 15px;
+            /* 圆角 */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+            /* 阴影 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            /* -webkit-box-shadow: 0px 1px 1px #de1dde;
+            -moz-box-shadow: 0px 1px 1px #de1dde; */
+            box-shadow: 0px 0px 10px #474647;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            display: block;
+        }
+
+        .node rect {
+            fill: #3c6575;
+            /* stroke: steelblue;
+            stroke-width: 2px; */
+        }
+
+        .node text {
+            font: 10px sans-serif;
+            fill: white;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 1.5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Klee Output</h1>
+    <pre id="wait">Waiting for output...</pre>
+    <div id="svg-container">
+        <svg>
+            <!-- 定义箭头标记
+            <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="5" markerHeight="5"
+                    orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 Z" fill="#ccc"></path>
+                </marker>
+            </defs> -->
+        </svg>
+    </div>
+
+    <script>
+
+        /******************画布准备******************/
+
+        // 动态设置节点之间的水平和垂直间距，避免重叠
+        const treeLayout = d3.tree().nodeSize([120, 80]); // 每个节点的水平和垂直间距
+
+        // 设置 SVG 画布
+        // const svg = d3.select("svg")
+        //     .attr("viewBox", `0 0 1000 600`) // 设置初始视窗大小
+        //     .attr("preserveAspectRatio", "xMidYMid meet"); // 保持比例缩放
+        const svg = d3.select("svg");
+
+        // 创建缩放行为
+        const zoom = d3.zoom()
+            .scaleExtent([0.5, 5])  // 设置缩放范围
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);  // 绑定缩放事件
+                adjustSvgSize();  // 动态调整 SVG 尺寸
+            });
+
+        svg.call(zoom);  // 将缩放行为绑定到 SVG
+
+        const g = svg.append("g").attr("transform", "translate(50,50)");
+
+
+        /******************输出数据******************/
+
+        let rootNode;
+        let firstLoad = true;  // 标志变量：检测是否是首次加载
+        // updateTree(data);
+
+        // 监听来自 extension.ts 的消息
+        window.addEventListener('message', event => {
+            const message = event.data;
+            const outputElement = document.getElementById('wait');
+            if (message.type === 'kleeOut') {
+                console.log("Received data:", message.content);
+                // console.log("Data type:", typeof message.content);
+                if (outputElement.textContent.includes('Waiting for output...')) {
+                    outputElement.textContent = '';
+                }
+                let parseData;
+                parseData = JSON.parse(message.content);
+                parseData.forEach(item => {
+                    // 将每个元素的 constraints 转换为合并形式
+                    if (item.constraints && Array.isArray(item.constraints)) {
+                        const combinedConstraints = item.constraints.join(' && '); // 合并为字符串
+                        item.constraints = combinedConstraints; // 替代原来的 constraints
+                    }
+                });
+                console.log(Array.isArray(parseData)); // 输出: true
+                console.log(parseData);
+                // svg.selectAll("*").remove(); // 清空 SVG 中的所有元素
+                // 重新创建 g 元素
+                // const g = svg.append("g").attr("transform", "translate(50,50)");
+                updateTree(parseData);
+            }
+
+            /******************输出用例******************/
+
+            else if (message.type === 'ktestOutput') {
+                console.log("Received data:", message.content);
+                const cases = processKtestOutput(message.content);
+                console.log("用例", cases);
+                cases.forEach(({ file, variables }) => {
+                    addTestCase(rootNode, file, variables);
+                });
+                console.log(rootNode);
+                console.log(Array.isArray(rootNode.data));
+                rootNode = d3.hierarchy(rootNode.data);
+                // treeLayout(rootNode);
+
+
+                update(rootNode);
+                // updateTree(rootNode.data);
+            }
+            else if (message.type === 'kstatsOutput') {
+                console.log("Received kstatsdata:", message.content);
+            }
+        });
+
+        function updateTree(data) {
+            // // 如果 data 是对象而不是数组，则将其包装为数组
+            // const dataArray = Array.isArray(data) ? data : [data];
+            // 使用 findRootNode 来查找根节点
+            const root = findRootNode(data);
+            console.log("根节点", root);
+
+            // 建树
+            const tree = buildTree(data);
+            console.log("Tree structure:", tree);
+
+            rootNode = d3.hierarchy(tree.get(root.name)); // 初始化 rootNode
+
+            update(rootNode);
+            adjustSvgSize();
+            // fitToScreen(); // 调整尺寸
+        }
+
+
+
+
+        /*******************************************/
+        /*******************************************/
+        /*************执行树构建所需函数*************/
+        /*******************************************/
+        /*******************************************/
+
+        // 找根
+        function findRootNode(data) {
+            const allChildren = data.flatMap(item => item.children || []);  // 确保 children 是数组
+
+            const root = data.find(item => !allChildren.includes(item.name));
+            return root;
+        }
+
+        // 建树
+        function buildTree(data) {
+            const nodesMap = new Map(data.map(d => [d.name, { ...d, children: [], _children: [] }]));
+
+            data.forEach(node => {
+                node.children.forEach(childName => {
+                    const childNode = nodesMap.get(childName);
+                    if (childNode) {
+                        nodesMap.get(node.name).children.push(childNode);
+                    }
+                });
+            });
+            return nodesMap;
+        }
+
+        function update(source) {
+            // // 重新构建树
+            // let newRoot = d3.hierarchy(root.data); // 使用原始数据重新构建树
+
+            // console.log("Root node hierarchy:", newRoot);
+            // 确保树布局被正确计算
+            treeLayout(rootNode);
+
+            const nodes = rootNode.descendants();
+            const links = rootNode.links();
+            console.log("Nodes after layout:", nodes);
+            console.log("Links after layout:", links);
+
+
+
+            // 初始化或更新节点
+            // const node = g.selectAll(".node")
+            //     .data(nodes, d => d.id || (d.id = ++id));
+            const node = g.selectAll(".node")
+                .data(nodes, d => d.data.name);
+
+            console.log("D3 node selection:", node);  // 打印选择集
+            node.each(d => {
+                console.log("Node name:", d.data.name, "Testcase:", d.data.testcase);
+            });
+
+            const nodeEnter = node.enter()
+                .append("g")
+                .attr("class", "node")
+                // 初始化节点的 transform，避免 undefined
+                .attr("transform", d => `translate(${source.x0 || 0}, ${source.y0 || 0})`)
+                .on("click", (event, d) => {
+                    console.log("Node clicked:", d.data.name); // 调试输出
+                    toggle(d); // 切换展开/折叠状态
+                    update(d); // 更新布局
+                });
+            nodeEnter.each(d => {
+                console.log("Node name:", d.data.name, "Testcase:", d.data.testcase);
+            });
+
+            nodeEnter.append("rect")
+                .attr("width", d => String(d.data.name).length * 6 + 20) // 根据文字长度调整节点宽度
+                .attr("height", 30) // 固定节点高度
+                .attr("x", d => -(String(d.data.name).length * 3 + 10)) // 让矩形居中
+                .attr("y", -15) // 垂直居中
+                .attr("rx", 10) // 圆角半径，水平方向
+                .attr("ry", 10); // 圆角半径，垂直方向
+
+            nodeEnter.each(d => {
+                console.log(d);
+                console.log("Node data:", d.data);  // 检查绑定的数据
+                console.log(typeof d.data);
+                console.log("Node name:", d.data.name);
+                console.log("Testcase:", d.data.testcase);
+                console.log("Type of testcase:", typeof d.data.testcase);
+            });
+
+            nodeEnter.append("text")
+                .attr("dy", 4)
+                .attr("text-anchor", "middle")
+                .text(d => d.data.constraints || d.data.testcase);
+
+            const nodeUpdate = nodeEnter.merge(node);
+
+            // 更新节点位置
+            // const transition = firstLoad ? nodeUpdate : nodeUpdate.transition().duration(300);
+            const transition = nodeUpdate.transition().duration(300);
+            // 更新节点位置
+            transition.attr("transform", d => `translate(${d.x || 0}, ${d.y || 0})`);
+
+            node.exit().transition()
+                .duration(300)
+                .attr("transform", d => `translate(${source.x || 0}, ${source.y || 0})`)
+                .remove();
+
+            // 保存节点的当前坐标
+            nodes.forEach(d => {
+                d.x0 = d.x;
+                d.y0 = d.y;
+            });
+
+            // 更新连线
+            const link = g.selectAll(".link")
+                .data(links, d => d.target.name);
+
+            const linkEnter = link.enter()
+                .insert("path", "g")
+                .attr("class", "link")
+                .attr("d", d => {
+                    const o = { x: source.x0 || 0, y: source.y0 || 0 };
+                    return diagonal(o, o);
+                });
+
+            link.merge(linkEnter).transition()
+                .duration(0)
+                .attr("d", d => diagonal(d.source, d.target))
+                ;
+
+            link.exit().transition()
+                .duration(0)
+                .attr("d", d => {
+                    const o = { x: source.x || 0, y: source.y || 0 };
+                    return diagonal(o, o);
+                })
+                .remove();
+
+            if (firstLoad) {
+                fitToScreen();
+            }
+            // fitToScreen();
+            // 在首次加载完成后，将标志变量设为 false
+            firstLoad = false;
+        }
+
+        // 画线
+        function diagonal(s, d) {
+            const sx = s.x || 0, sy = s.y || 0;
+            const dx = d.x || 0, dy = d.y || 0;
+            // 检查 source 和 target 是否存在
+            const sourceX = s.x;
+            const sourceY = s.y + 15; // 父节点底部
+            const targetX = d.x;
+            const targetY = d.y - 15; // 子节点顶部
+
+            // 控制点1：接近父节点底部
+            const controlX1 = sourceX;
+            const controlY1 = (sourceY + targetY) / 2;
+
+            // 控制点2：接近子节点顶部
+            const controlX2 = targetX;
+            const controlY2 = (sourceY + targetY) / 2;
+
+            // 使用 d3.path() 构建路径
+            const path = d3.path();
+            path.moveTo(sourceX, sourceY); // 从父节点底部开始
+            path.bezierCurveTo(controlX1, controlY1, controlX2, controlY2, targetX, targetY); // 三次贝塞尔曲线
+
+            return path.toString(); // 返回路径字符串
+        }
+        // .attr("marker-end", "url(#arrow)")
+        ; // 应用箭头
+        function toggle(d) {
+
+            if (d.children) {
+                d._children = d.children;
+                d.children = null;
+                // console.log("折叠了", d.data.name)
+                // console.log("d.children", d.children)
+                // console.log("d._children", d._children)
+            } else {
+                d.children = d._children;
+                d._children = null;
+            }
+        }
+
+        // 动态调整 SVG 尺寸
+        function adjustSvgSize() {
+            const bbox = g.node().getBBox();  // 获取内容的边界框
+            svg.attr("width", bbox.width + bbox.x * 2)
+                .attr("height", bbox.height + bbox.y * 2);
+        }
+
+        // 自动缩放和居中图像，留一点 padding 避免紧贴边缘
+        function fitToScreen(padding = 20) {
+            const bbox = g.node().getBBox(); // 获取内容边界框
+            console.log("BBox:", bbox);  // 打印 BBox 检查是否有效
+
+            // 防止 BBox 返回负值的情况
+            const width = Math.max(1, bbox.width);  // 最小宽度为 1，防止负值或 0
+            const height = Math.max(1, bbox.height);  // 最小高度为 1
+
+            const svgWidth = svg.node().clientWidth;
+            const svgHeight = svg.node().clientHeight;
+
+            const widthRatio = (svgWidth - padding * 2) / bbox.width;
+            const heightRatio = (svgHeight - padding * 2) / bbox.height;
+            const scale = Math.min(widthRatio, heightRatio); // 选择较小的缩放比例
+
+            const x = (svgWidth - bbox.width * scale) / 2 - bbox.x * scale;
+            const y = (svgHeight - bbox.height * scale) / 2 - bbox.y * scale;
+
+            // 使用 transition 平滑移动到缩放后的视图
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(x, y).scale(scale)
+            );
+        }
+
+
+        /*******************************************/
+        /*******************************************/
+        /**************添加用例所需函数**************/
+        /*******************************************/
+        /*******************************************/
+
+        function addTestCase(root, ktestFile, variables) {
+            // 生成符合 a==0 && b==1 格式的 testCase 字符串
+            const testCase = Object.entries(variables)
+                .map(([key, value]) => `${key}==${value}`)
+                .join(' && ');
+            console.log("这里的类型");
+            console.log(typeof testCase);
+
+            console.log(`Generated testCase: ${testCase}`); // 调试输出
+            function traverse(node) {
+
+                // 确保 node 和 node.data 存在
+                if (!node || !node.data) {
+                    console.warn("Node or node.data is undefined:", node);
+                    return false;
+                }
+                // 非叶子节点
+                if (node.children && node.children.length > 0) {
+                    for (let child of node.children) {
+                        if (traverse(child)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                // 叶子节点
+                else {
+                    // 用例结点
+                    if (!node.data.constraints) {
+                        console.error("该结点是用例:", node);
+                        return false; // 如果 data 不存在，跳过该节点
+                    } else {
+                        const constraints = node.data.constraints;
+                        console.log(node.data.name);
+                        console.log(constraints);
+                        console.log(`Checking leaf node with constraints: ${constraints}`);
+
+                        try {
+                            const evaluatedConstraints = constraints.replace(
+                                new RegExp(Object.keys(variables).join('|'), 'g'),
+                                (match) => variables[match]
+                            );
+                            console.log(`Evaluating constraints: ${evaluatedConstraints}`);
+
+                            const isValid = eval(evaluatedConstraints);
+                            console.log(`Result of evaluation: ${isValid}`);
+
+                            if (isValid) {
+                                node.children = [];
+                                const newChild = JSON.parse(JSON.stringify({
+                                    name: ktestFile,
+                                    testcase: testCase,
+                                    children: [],
+                                    x: node.x || 0,
+                                    y: node.y || 0,
+                                    x0: node.x || 0, // 初始 x0
+                                    y0: node.y || 0,  // 初始 y0
+                                }));
+                                node.children.push(newChild);
+                                node.data.children.push(newChild);
+                                console.log(`Added test case ${testCase} to node with constraints: ${constraints}`);
+                                return true; // 插入成功，结束遍历
+                            } else {
+                                console.log(`Test case ${testCase} did not meet constraints: ${constraints}`);
+                            }
+                        } catch (err) {
+                            console.error(`Error evaluating constraints: ${err}`);
+                        }
+                    }
+                }
+            }
+            traverse(root); // 从根节点开始遍历
+        }
+
+        function processKtestOutput(output) {
+            const lines = output.split('\n');
+            const testCases = [];
+            let currentKtestFile = null;
+            let currentVariables = {}; // 存储当前文件的变量
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+
+                // 识别 ktest file 行
+                if (line.startsWith('ktest file :')) {
+                    if (currentKtestFile && Object.keys(currentVariables).length > 0) {
+                        // 保存当前文件的测试用例
+                        testCases.push({ file: currentKtestFile, variables: { ...currentVariables } });
+                    }
+                    currentKtestFile = line.split(':')[1]
+                        .trim()
+                        .replace(/^'|'$/g, '')  // 去掉首尾单引号
+                        .match(/test\d{6}/)[0];  // 提取文件名的核心部分，如 'test000001'
+                    currentVariables = {}; // 重置变量集
+                    continue;
+                }
+
+                // 识别变量和其 int 值
+                if (line.startsWith('object') && line.includes('name:')) {
+                    const varName = line.split(':')[2].trim().replace(/'/g, '');
+                    const intValueLine = lines[i + 4].trim(); // 对应 int 行
+                    const intValue = parseInt(intValueLine.split(':')[2].trim(), 10);
+
+                    // 存储变量和值
+                    currentVariables[varName] = intValue;
+                }
+            }
+
+            // 保存最后一个文件的测试用例
+            if (currentKtestFile && Object.keys(currentVariables).length > 0) {
+                testCases.push({ file: currentKtestFile, variables: { ...currentVariables } });
+            }
+            return testCases;
+        }
+    </script>
+</body>
+
+</html>

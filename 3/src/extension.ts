@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { startDebugger } from './debuggerAdapter';
+import { log } from 'console';
 
 function activate(context: vscode.ExtensionContext): void {
+	console.log("插件3已启动")
 	// 注册 "Run and Debug" 命令
 	let disposable = vscode.commands.registerCommand('extension.runAndDebug', () => {
 		// 向调试器适配器发送启动请求

@@ -101,6 +101,10 @@
         "stop_token": "cpp",
         "thread": "cpp",
         "cfenv": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "*.inc": "cpp",
+        "filesystem": "cpp",
+        "hash_map": "cpp",
+        "hash_set": "cpp"
     }
 }

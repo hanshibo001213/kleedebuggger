@@ -42,6 +42,9 @@ export function activateKleeDebug(context: vscode.ExtensionContext, factory?: vs
     context.subscriptions.push(
         vscode.debug.registerDebugConfigurationProvider('klee-debugger', {
             provideDebugConfigurations(folder, token) {
+                console.log("provideDebugConfigurations triggered");
+                const activeFile = vscode.window.activeTextEditor?.document.fileName;
+                console.log("Active File: ", activeFile);
                 return [{
                     name: 'Launch Current File',
                     type: 'klee-debugger',
