@@ -38,7 +38,6 @@ export function activateKleeDebug(context: vscode.ExtensionContext, factory?: vs
         }),
     );
 
-    // 注册动态调试配置提供器
     context.subscriptions.push(
         vscode.debug.registerDebugConfigurationProvider('klee-debugger', {
             provideDebugConfigurations(folder, token) {
@@ -49,7 +48,7 @@ export function activateKleeDebug(context: vscode.ExtensionContext, factory?: vs
                     name: 'Launch Current File',
                     type: 'klee-debugger',
                     request: 'launch',
-                    program: vscode.window.activeTextEditor?.document.fileName // 当前打开文件
+                    program: vscode.window.activeTextEditor?.document.fileNam
                 }];
             }
         })
