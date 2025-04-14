@@ -18,6 +18,10 @@
 
 [官方文档](https://code.visualstudio.com/api)
 
-[官方调试插件demo](https://github.com/microsoft/vscode-mock-debug)
+[官方提供的调试插件demo](https://github.com/microsoft/vscode-mock-debug)
 
-[]
+[调试适配器协议官方文档](https://microsoft.github.io/debug-adapter-protocol/)
+
+[tutorial1](https://vscode-docs.readthedocs.io/en/stable/extensions/debugging-extensions/)
+
+[tutorial2](https://www.cnblogs.com/liuxianan/p/vscode-plugin-overview.html)
