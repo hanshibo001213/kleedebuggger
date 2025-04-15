@@ -10,6 +10,10 @@
 
 本项目是一个基于 KLEE 的[符号执行](https://en.wikipedia.org/wiki/Symbolic_execution)可视化调试插件，集成于 [VS Code](https://code.visualstudio.com/) 开发环境，旨在为 C/C++ 程序提供更加直观、交互式的符号执行体验。
 
+### 🎬 video demo
+
+[https://www.youtube.com/watch?v=dFW7Cg7mEec](https://www.youtube.com/watch?v=dFW7Cg7mEec)
+
 ### 环境配置
 
 - VS Code 1.93.0
