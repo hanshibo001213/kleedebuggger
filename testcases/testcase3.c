@@ -1,83 +1,69 @@
-#include <assert.h>
 #include "klee.h"
+#include <assert.h>
 #include <stdio.h>
-#include <limits.h>
 
-#ifndef OMITBAD
-
-void CWE190_Integer_Overflow__char_symbolic_add_01_bad()
+int main()
 {
-    char data;
-    data = ' ';
-    klee_make_symbolic(&data, sizeof(data), "data");
+    int cur_vertical_sep;
+    int high_confidence;
+    int own_tracked_alt;
+    int own_tracked_alt_rate;
+    int other_tracked_alt;
+    int up_separation;
+    int down_separation;
+    int climb_inhibit;
 
+    klee_make_symbolic(&cur_vertical_sep, sizeof(cur_vertical_sep), "cur_vertical_sep");
+    klee_make_symbolic(&high_confidence, sizeof(high_confidence), "high_confidence");
+    klee_make_symbolic(&own_tracked_alt, sizeof(own_tracked_alt), "own_tracked_alt");
+    klee_make_symbolic(&own_tracked_alt_rate, sizeof(own_tracked_alt_rate), "own_tracked_alt_rate");
+    klee_make_symbolic(&other_tracked_alt, sizeof(other_tracked_alt), "other_tracked_alt");
+    klee_make_symbolic(&up_separation, sizeof(up_separation), "up_separation");
+    klee_make_symbolic(&down_separation, sizeof(down_separation), "down_separation");
+    klee_make_symbolic(&climb_inhibit, sizeof(climb_inhibit), "climb_inhibit");
+
+    if (cur_vertical_sep < 0 || cur_vertical_sep > 1500)
+        return 0;
+    if (own_tracked_alt_rate < 0 || own_tracked_alt_rate > 600)
+        return 0;
+    if (high_confidence != 0 && high_confidence != 1)
+        return 0;
+    if (climb_inhibit != 0 && climb_inhibit != 1)
+        return 0;
+
+    int upward_preferred = up_separation > down_separation;
+    int need_upward_RA = 0;
+    int need_downward_RA = 0;
+
+    if (high_confidence && own_tracked_alt_rate <= 600 && cur_vertical_sep > 600)
     {
-        char result = data + 1;
-        if (result < data)
-        {
-            klee_assert(0 && "Integer overflow detected in bad()");
-        }
+        need_upward_RA = (upward_preferred && !(own_tracked_alt < other_tracked_alt)) ||
+                         (!upward_preferred && other_tracked_alt < own_tracked_alt);
+        need_downward_RA = (upward_preferred && own_tracked_alt < other_tracked_alt) ||
+                           (!upward_preferred && !(other_tracked_alt < own_tracked_alt));
     }
-}
 
-#endif /* OMITBAD */
-
-#ifndef OMITGOOD
-
-static void goodG2B()
-{
-    char data;
-    data = 2;
-
+    int alt_sep = 0; // 0=UNRESOLVED, 1=UPWARD_RA, 2=DOWNWARD_RA
+    if (need_upward_RA && !need_downward_RA)
     {
-        char result = data + 1;
-        // 无需检查，因为已知安全
+        alt_sep = 1;
     }
-}
-
-/* goodB2G uses the BadSource with the GoodSink */
-static void goodB2G()
-{
-    char data;
-    data = ' ';
-    klee_make_symbolic(&data, sizeof(data), "data");
-
-    klee_assume(data >= 0); // char 可能是有符号的，控制在非负区间
-
-    if (data < CHAR_MAX)
+    else if (!need_upward_RA && need_downward_RA)
     {
-        char result = data + 1;
+        alt_sep = 2;
     }
     else
     {
-
+        alt_sep = 0;
     }
-}
 
-void CWE190_Integer_Overflow__char_symbolic_add_01_good()
-{
-    goodG2B();
-    goodB2G();
-}
+    if (alt_sep == 1 &&
+        climb_inhibit == 1 &&
+        high_confidence == 1 &&
+        cur_vertical_sep > 700)
+    {
+        klee_assert(0 && "Logic bomb triggered: improper collision avoidance decision!");
+    }
 
-#endif /* OMITGOOD */
-
-#ifdef INCLUDEMAIN
-
-int main(int argc, char *argv[])
-{
-    srand((unsigned)time(NULL));
-#ifndef OMITGOOD
-    printf("Calling good()...\n");
-    CWE190_Integer_Overflow__char_symbolic_add_01_good();
-    printf("Finished good()\n");
-#endif /* OMITGOOD */
-#ifndef OMITBAD
-    printf("Calling bad()...\n");
-    CWE190_Integer_Overflow__char_symbolic_add_01_bad();
-    printf("Finished bad()\n");
-#endif /* OMITBAD */
     return 0;
 }
-
-#endif
