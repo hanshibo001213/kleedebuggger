@@ -47,7 +47,6 @@ void CWE121_goodG2B()
     int i;
     int buffer[10] = {0};
 
-    /* GOOD: 使用 safe 的 concrete 值 */
     data = 7;
 
     if (data >= 0)
